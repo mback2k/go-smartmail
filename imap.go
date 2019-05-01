@@ -235,7 +235,7 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 	defer c.closeIMAP()
 
 	errors := make(chan error, 1)
-	messages := make(chan *imap.Message, 1)
+	messages := make(chan *imap.Message, 100)
 
 	go c.fetchMessages(messages, errors)
 	go c.smartMessages(messages, errors)
@@ -306,7 +306,6 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 					}
 					mailbox = mailbox + field
 				}
-				log.Println(mailbox)
 			} else {
 				mailbox = c.config.SmartActions.Move
 			}
