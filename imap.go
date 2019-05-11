@@ -69,6 +69,7 @@ type smartConfig struct {
 	SmartActions `mapstructure:"Actions"`
 
 	state smartState
+	total uint64
 	err   error
 }
 
@@ -317,6 +318,8 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 				errors <- err
 				return
 			}
+
+			c.config.total++
 		}
 	}
 }
