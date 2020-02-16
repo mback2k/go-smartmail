@@ -232,6 +232,7 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 	if err != nil {
 		c.log().Warn("Source connection failed: ", err)
 		cancel()
+		return
 	}
 	defer c.closeIMAP()
 
