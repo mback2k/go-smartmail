@@ -73,59 +73,59 @@ type smartConfig struct {
 	err   error
 }
 
-func (c *SmartServer) open() (*client.Client, error) {
-	con, err := client.DialTLS(c.Server, nil)
+func (s *SmartServer) open() (*client.Client, error) {
+	con, err := client.DialTLS(s.Server, nil)
 	if err != nil {
 		return nil, err
 	}
-	err = con.Login(c.Username, c.Password)
+	err = con.Login(s.Username, s.Password)
 	if err != nil {
 		return nil, err
 	}
 	return con, nil
 }
 
-func (c *SmartServer) openIMAP() error {
-	con, err := c.open()
+func (s *SmartServer) openIMAP() error {
+	con, err := s.open()
 	if err != nil {
 		return err
 	}
-	c.imapconn = con
+	s.imapconn = con
 	return nil
 }
 
-func (c *SmartServer) openIDLE() error {
-	con, err := c.open()
+func (s *SmartServer) openIDLE() error {
+	con, err := s.open()
 	if err != nil {
 		return err
 	}
-	c.idleconn = con
+	s.idleconn = con
 	return nil
 }
 
-func (c *SmartServer) selectIMAP() (*client.MailboxUpdate, error) {
-	status, err := c.imapconn.Select(c.Mailbox, false)
+func (s *SmartServer) selectIMAP() (*client.MailboxUpdate, error) {
+	status, err := s.imapconn.Select(s.Mailbox, false)
 	update := &client.MailboxUpdate{Mailbox: status}
 	return update, err
 }
 
-func (c *SmartServer) selectIDLE() (*client.MailboxUpdate, error) {
-	status, err := c.idleconn.Select(c.Mailbox, true)
+func (s *SmartServer) selectIDLE() (*client.MailboxUpdate, error) {
+	status, err := s.idleconn.Select(s.Mailbox, true)
 	update := &client.MailboxUpdate{Mailbox: status}
 	return update, err
 }
 
-func (c *SmartServer) initIDLE() error {
-	update, err := c.selectIDLE()
+func (s *SmartServer) initIDLE() error {
+	update, err := s.selectIDLE()
 	if err != nil {
 		return err
 	}
 	updates := make(chan client.Update, 1)
 	updates <- update
 
-	c.idle = idle.NewClient(c.idleconn)
-	c.idleconn.Updates = updates
-	c.updates = updates
+	s.idle = idle.NewClient(s.idleconn)
+	s.idleconn.Updates = updates
+	s.updates = updates
 	return nil
 }
 
@@ -152,27 +152,27 @@ func (c *smartConfig) init() error {
 	return err
 }
 
-func (c *SmartServer) closeIMAP() error {
-	if c.imapconn == nil {
+func (s *SmartServer) closeIMAP() error {
+	if s.imapconn == nil {
 		return nil
 	}
-	err := c.imapconn.Logout()
+	err := s.imapconn.Logout()
 	if err != nil {
 		return err
 	}
-	c.imapconn = nil
+	s.imapconn = nil
 	return nil
 }
 
-func (c *SmartServer) closeIDLE() error {
-	if c.idleconn == nil {
+func (s *SmartServer) closeIDLE() error {
+	if s.idleconn == nil {
 		return nil
 	}
-	err := c.idleconn.Logout()
+	err := s.idleconn.Logout()
 	if err != nil {
 		return err
 	}
-	c.idleconn = nil
+	s.idleconn = nil
 	return nil
 }
 
@@ -255,8 +255,8 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 	}
 }
 
-func (c *SmartServer) fetchMessages(messages chan *imap.Message, errors chan<- error) {
-	update, err := c.selectIMAP()
+func (s *SmartServer) fetchMessages(messages chan *imap.Message, errors chan<- error) {
+	update, err := s.selectIMAP()
 	if err != nil {
 		errors <- err
 		close(messages)
@@ -271,16 +271,16 @@ func (c *SmartServer) fetchMessages(messages chan *imap.Message, errors chan<- e
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(1, update.Mailbox.Messages)
 
-	errors <- c.imapconn.Fetch(seqset, []imap.FetchItem{
+	errors <- s.imapconn.Fetch(seqset, []imap.FetchItem{
 		"UID", "FLAGS", "INTERNALDATE"}, messages)
 }
 
-func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<- error) {
+func (s *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<- error) {
 	defer close(errors)
 
-	move := move.NewClient(c.imapconn)
+	move := move.NewClient(s.imapconn)
 	for msg := range messages {
-		c.config.log().Info("Handling message: ", msg.Uid)
+		s.config.log().Info("Handling message: ", msg.Uid)
 
 		deleted := false
 		for _, flag := range msg.Flags {
@@ -291,17 +291,17 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 			}
 		}
 		if deleted {
-			c.config.log().Info("Ignoring message: ", msg.Uid)
+			s.config.log().Info("Ignoring message: ", msg.Uid)
 			continue
 		}
 
-		if c.config.SmartActions.Move != "" {
+		if s.config.SmartActions.Move != "" {
 			seqset := new(imap.SeqSet)
 			seqset.AddNum(msg.Uid)
 
 			var mailbox string
-			if c.config.SmartActions.MoveJodaTime {
-				fields := strings.Split(c.config.SmartActions.Move, "%")
+			if s.config.SmartActions.MoveJodaTime {
+				fields := strings.Split(s.config.SmartActions.Move, "%")
 				for i, field := range fields {
 					if i%2 == 1 {
 						field = joda.Format(field, msg.InternalDate)
@@ -309,10 +309,10 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 					mailbox = mailbox + field
 				}
 			} else {
-				mailbox = c.config.SmartActions.Move
+				mailbox = s.config.SmartActions.Move
 			}
 
-			c.config.log().Info("Moving message: ", msg.Uid, " to ", mailbox)
+			s.config.log().Info("Moving message: ", msg.Uid, " to ", mailbox)
 
 			err := move.UidMoveWithFallback(seqset, mailbox)
 			if err != nil {
@@ -320,7 +320,7 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 				return
 			}
 
-			c.config.total++
+			s.config.total++
 		}
 	}
 }
