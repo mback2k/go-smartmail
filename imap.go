@@ -20,8 +20,6 @@ package main
 
 import (
 	"context"
-	"log"
-	"reflect"
 	"strings"
 
 	joda "github.com/vjeantet/jodaTime"
@@ -30,6 +28,8 @@ import (
 	idle "github.com/emersion/go-imap-idle"
 	move "github.com/emersion/go-imap-move"
 	client "github.com/emersion/go-imap/client"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // SmartServer contains the IMAP credentials.
@@ -196,7 +196,7 @@ func (c *smartConfig) watch(ctx context.Context) error {
 	}(c, c.state)
 	c.state = watchingState
 
-	log.Println(c.Name, "[", c.state, "]:", "Begin idling")
+	c.log().Info("Begin idling")
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -208,13 +208,13 @@ func (c *smartConfig) watch(ctx context.Context) error {
 	for {
 		select {
 		case update := <-c.updates:
-			log.Println(c.Name, "[", c.state, "]:", "New update:", reflect.TypeOf(update))
+			c.log().Infof("New update: %#v", update)
 			_, ok := update.(*client.MailboxUpdate)
 			if ok {
 				c.handle(cancel)
 			}
 		case err := <-errors:
-			log.Println(c.Name, "[", c.state, "]:", "Not idling anymore", err)
+			c.log().Warn("Not idling anymore: ", err)
 			return err
 		}
 	}
@@ -226,11 +226,11 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 	}(c, c.state)
 	c.state = handlingState
 
-	log.Println(c.Name, "[", c.state, "]:", "Begin handling")
+	c.log().Info("Begin handling")
 
 	err := c.openIMAP()
 	if err != nil {
-		log.Println(c.Name, "[", c.state, "]:", "Source connection failed", err)
+		c.log().Warn("Source connection failed: ", err)
 		cancel()
 	}
 	defer c.closeIMAP()
@@ -244,11 +244,11 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 	for {
 		err, more := <-errors
 		if err != nil {
-			log.Println(c.Name, "[", c.state, "]:", "Message handling failed", err)
+			c.log().Warn("Message handling failed: ", err)
 			cancel()
 		}
 		if !more {
-			log.Println(c.Name, "[", c.state, "]:", "Message handling finished")
+			c.log().Info("Message handling finished")
 			break
 		}
 	}
@@ -279,7 +279,7 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 
 	move := move.NewClient(c.imapconn)
 	for msg := range messages {
-		log.Println(c.config.Name, "[", c.config.state, "]:", "Handling message", msg.Uid)
+		c.config.log().Info("Handling message: ", msg.Uid)
 
 		deleted := false
 		for _, flag := range msg.Flags {
@@ -290,7 +290,7 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 			}
 		}
 		if deleted {
-			log.Println(c.config.Name, "[", c.config.state, "]:", "Ignoring message", msg.Uid)
+			c.config.log().Info("Ignoring message: ", msg.Uid)
 			continue
 		}
 
@@ -311,7 +311,7 @@ func (c *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 				mailbox = c.config.SmartActions.Move
 			}
 
-			log.Println(c.config.Name, "[", c.config.state, "]:", "Moving message", msg.Uid, "to", mailbox)
+			c.config.log().Info("Moving message: ", msg.Uid, " to ", mailbox)
 
 			err := move.UidMoveWithFallback(seqset, mailbox)
 			if err != nil {
@@ -338,4 +338,11 @@ func (c *smartConfig) done(done chan<- *smartConfig) {
 		c.err = err
 	}
 	done <- c
+}
+
+func (c *smartConfig) log() *log.Entry {
+	return log.WithFields(log.Fields{
+		"name":  c.Name,
+		"state": c.state,
+	})
 }
