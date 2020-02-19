@@ -214,7 +214,7 @@ func (c *smartConfig) watch(ctx context.Context) error {
 				c.handle(cancel)
 			}
 		case err := <-errors:
-			c.log().Warn("Not idling anymore: ", err)
+			c.log().Warnf("Not idling anymore: %w", err)
 			return err
 		}
 	}
@@ -230,7 +230,7 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 
 	err := c.openIMAP()
 	if err != nil {
-		c.log().Warn("Source connection failed: ", err)
+		c.log().Warnf("Source connection failed: %w", err)
 		cancel()
 		return
 	}
@@ -245,7 +245,7 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 	for {
 		err, more := <-errors
 		if err != nil {
-			c.log().Warn("Message handling failed: ", err)
+			c.log().Warnf("Message handling failed: %w", err)
 			cancel()
 		}
 		if !more {
@@ -280,7 +280,7 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 
 	move := move.NewClient(s.imapconn)
 	for msg := range messages {
-		s.config.log().Info("Handling message: ", msg.Uid)
+		s.config.log().Infof("Handling message: %d", msg.Uid)
 
 		deleted := false
 		for _, flag := range msg.Flags {
@@ -291,7 +291,7 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 			}
 		}
 		if deleted {
-			s.config.log().Info("Ignoring message: ", msg.Uid)
+			s.config.log().Infof("Ignoring message: %d", msg.Uid)
 			continue
 		}
 
@@ -312,7 +312,7 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 				mailbox = s.config.SmartActions.Move
 			}
 
-			s.config.log().Info("Moving message: ", msg.Uid, " to ", mailbox)
+			s.config.log().Infof("Moving message: %d to '%s'", msg.Uid, mailbox)
 
 			err := move.UidMoveWithFallback(seqset, mailbox)
 			if err != nil {
