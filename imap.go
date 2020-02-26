@@ -70,7 +70,7 @@ type smartConfig struct {
 
 	state smartState
 	total uint64
-	err   error
+	ctx   context.Context
 }
 
 func (s *SmartServer) open() (*client.Client, error) {
@@ -190,7 +190,7 @@ func (c *smartConfig) close() error {
 	return nil
 }
 
-func (c *smartConfig) watch(ctx context.Context) error {
+func (c *smartConfig) watch() error {
 	defer func(c *smartConfig, s smartState) {
 		c.state = s
 	}(c, c.state)
@@ -198,7 +198,7 @@ func (c *smartConfig) watch(ctx context.Context) error {
 
 	c.log().Info("Begin idling")
 
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(c.ctx)
 	defer cancel()
 
 	errors := make(chan error, 1)
@@ -325,20 +325,13 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 	}
 }
 
-func (c *smartConfig) run(ctx context.Context, done chan<- *smartConfig) {
-	defer c.done(done)
-	c.err = c.init()
-	if c.err == nil {
-		c.err = c.watch(ctx)
+func (c *smartConfig) run() error {
+	err := c.init()
+	if err != nil {
+		return err
 	}
-}
-
-func (c *smartConfig) done(done chan<- *smartConfig) {
-	err := c.close()
-	if c.err == nil {
-		c.err = err
-	}
-	done <- c
+	defer c.close()
+	return c.watch()
 }
 
 func (c *smartConfig) log() *log.Entry {
