@@ -211,7 +211,10 @@ func (c *smartConfig) watch() error {
 			c.log().Infof("New update: %#v", update)
 			_, ok := update.(*client.MailboxUpdate)
 			if ok {
-				c.handle(cancel)
+				err := c.handle()
+				if err != nil {
+					return err
+				}
 			}
 		case err := <-errors:
 			c.log().Warnf("Not idling anymore: %v", err)
@@ -220,7 +223,7 @@ func (c *smartConfig) watch() error {
 	}
 }
 
-func (c *smartConfig) handle(cancel context.CancelFunc) {
+func (c *smartConfig) handle() error {
 	defer func(c *smartConfig, s smartState) {
 		c.state = s
 	}(c, c.state)
@@ -231,8 +234,7 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 	err := c.openIMAP()
 	if err != nil {
 		c.log().Warnf("Source connection failed: %v", err)
-		cancel()
-		return
+		return err
 	}
 	defer c.closeIMAP()
 
@@ -246,7 +248,7 @@ func (c *smartConfig) handle(cancel context.CancelFunc) {
 		err, more := <-errors
 		if err != nil {
 			c.log().Warnf("Message handling failed: %v", err)
-			cancel()
+			return err
 		}
 		if !more {
 			c.log().Info("Message handling finished")
