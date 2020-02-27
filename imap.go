@@ -22,6 +22,8 @@ import (
 	"context"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	joda "github.com/vjeantet/jodaTime"
 
 	imap "github.com/emersion/go-imap"
@@ -238,48 +240,45 @@ func (c *smartConfig) handle() error {
 	}
 	defer c.closeIMAP()
 
-	errors := make(chan error, 1)
 	messages := make(chan *imap.Message, 100)
 
-	go c.fetchMessages(messages, errors)
-	go c.smartMessages(messages, errors)
+	var g errgroup.Group
+	g.Go(func() error {
+		return c.fetchMessages(messages)
+	})
+	g.Go(func() error {
+		return c.smartMessages(messages)
+	})
 
-	for {
-		err, more := <-errors
-		if err != nil {
-			c.log().Warnf("Message handling failed: %v", err)
-			return err
-		}
-		if !more {
-			c.log().Info("Message handling finished")
-			break
-		}
+	err = g.Wait()
+	if err != nil {
+		c.log().Warnf("Message handling failed: %v", err)
+	} else {
+		c.log().Info("Message handling finished")
 	}
+	return err
 }
 
-func (s *SmartServer) fetchMessages(messages chan *imap.Message, errors chan<- error) {
+func (s *SmartServer) fetchMessages(messages chan *imap.Message) error {
 	update, err := s.selectIMAP()
 	if err != nil {
-		errors <- err
 		close(messages)
-		return
+		return err
 	}
 
 	if update.Mailbox.Messages < 1 {
 		close(messages)
-		return
+		return nil
 	}
 
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(1, update.Mailbox.Messages)
 
-	errors <- s.imapconn.Fetch(seqset, []imap.FetchItem{
+	return s.imapconn.Fetch(seqset, []imap.FetchItem{
 		"UID", "FLAGS", "INTERNALDATE"}, messages)
 }
 
-func (s *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<- error) {
-	defer close(errors)
-
+func (s *SmartServer) smartMessages(messages <-chan *imap.Message) error {
 	move := move.NewClient(s.imapconn)
 	for msg := range messages {
 		s.config.log().Infof("Handling message: %d", msg.Uid)
@@ -318,13 +317,15 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message, errors chan<-
 
 			err := move.UidMoveWithFallback(seqset, mailbox)
 			if err != nil {
-				errors <- err
-				return
+				s.config.log().Warnf("Message moving failed: %v", err)
+				return err
 			}
 
 			s.config.total++
 		}
 	}
+
+	return nil
 }
 
 func (c *smartConfig) run() error {
