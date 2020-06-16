@@ -253,10 +253,11 @@ func (c *smartConfig) handle() error {
 	err = g.Wait()
 	if err != nil {
 		c.log().Warnf("Message handling failed: %v", err)
-	} else {
-		c.log().Info("Message handling finished")
+		return err
 	}
-	return err
+
+	c.log().Info("Message handling finished")
+	return nil
 }
 
 func (s *SmartServer) fetchMessages(messages chan *imap.Message) error {
