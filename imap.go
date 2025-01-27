@@ -315,7 +315,17 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message) error {
 
 			s.config.log().Infof("Moving message: %d to '%s'", msg.Uid, mailbox)
 
-			err := move.UidMoveWithFallback(seqset, mailbox)
+			_, err := s.imapconn.Status(mailbox, []imap.StatusItem{imap.StatusMessages})
+			if err != nil {
+				s.config.log().Warnf("Status of mailbox failed: %v", err)
+				err = s.imapconn.Create(mailbox)
+				if err != nil {
+					s.config.log().Warnf("Mailbox creation failed: %v", err)
+					return err
+				}
+			}
+
+			err = move.UidMoveWithFallback(seqset, mailbox)
 			if err != nil {
 				s.config.log().Warnf("Message moving failed: %v", err)
 				return err
