@@ -286,8 +286,7 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message) error {
 
 		deleted := false
 		for _, flag := range msg.Flags {
-			switch flag {
-			case imap.DeletedFlag:
+			if flag == imap.DeletedFlag {
 				deleted = true
 				break
 			}
