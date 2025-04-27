@@ -1,8 +1,6 @@
 module github.com/mback2k/go-smartmail
 
-go 1.22.0
-
-toolchain go1.23.5
+go 1.24.2
 
 require (
 	github.com/emersion/go-imap v1.2.1
@@ -19,6 +17,13 @@ require (
 )
 
 require (
+	github.com/eclipse/paho.mqtt.golang v1.5.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
+	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/oauth2 v0.29.0 // indirect
+)
+
+require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6 // indirect
@@ -26,6 +31,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/magiconair/properties v1.8.9 // indirect
+	github.com/mback2k/go-modernauth v0.0.0-20250427194617-a67caac85515
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect

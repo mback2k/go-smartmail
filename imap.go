@@ -21,9 +21,12 @@ package main
 import (
 	"context"
 	"strings"
+	"sync"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/sync/errgroup"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	joda "github.com/vjeantet/jodaTime"
 
 	imap "github.com/emersion/go-imap"
@@ -32,6 +35,9 @@ import (
 	client "github.com/emersion/go-imap/client"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mback2k/go-modernauth"
+	"github.com/mback2k/go-modernauth/hassmqtt"
 )
 
 // SmartServer contains the IMAP credentials.
@@ -39,6 +45,7 @@ type SmartServer struct {
 	Server   string
 	Username string
 	Password string
+	Provider string
 	Mailbox  string
 
 	config   *smartConfig
@@ -46,6 +53,7 @@ type SmartServer struct {
 	idleconn *client.Client
 	idle     *idle.Client
 	updates  chan client.Update
+	tokensrc oauth2.TokenSource
 }
 
 // SmartActions defines the activities.
@@ -73,14 +81,32 @@ type smartConfig struct {
 	state smartState
 	total uint64
 	ctx   context.Context
+
+	mqttopts *mqtt.ClientOptions
+	mqttlock *sync.Mutex
 }
 
 func (s *SmartServer) open() (*client.Client, error) {
+	if s.Provider != "" {
+		if s.tokensrc == nil {
+			backend := hassmqtt.NewHassMqttAuthBackend(s.config.ctx, s.Username, s.config.mqttopts, s.config.mqttlock)
+			s.tokensrc = modernauth.NewDeviceAuthTokenSource(s.config.ctx, s.Provider, backend)
+		}
+		tok, err := s.tokensrc.Token()
+		if err != nil {
+			return nil, err
+		}
+		s.Password = tok.AccessToken
+	}
 	con, err := client.DialTLS(s.Server, nil)
 	if err != nil {
 		return nil, err
 	}
-	err = con.Login(s.Username, s.Password)
+	if s.Provider != "" {
+		err = con.Authenticate(modernauth.NewXoauth2Client(s.Username, s.Password))
+	} else {
+		err = con.Login(s.Username, s.Password)
+	}
 	if err != nil {
 		return nil, err
 	}
