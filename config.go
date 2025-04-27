@@ -18,7 +18,11 @@
 
 package main
 
-import "github.com/spf13/viper"
+import (
+	"os"
+
+	"github.com/spf13/viper"
+)
 
 type configLogging struct {
 	Level string
@@ -47,6 +51,10 @@ func loadConfig() (*config, error) {
 	vpr.AddConfigPath("/etc/go-smartmail/")
 	vpr.AddConfigPath("$HOME/.go-smartmail")
 	vpr.AddConfigPath(".")
+	if len(os.Args) > 1 {
+		vpr.SetConfigFile(os.Args[1])
+	}
+
 	err := vpr.ReadInConfig()
 	if err != nil {
 		return nil, err
