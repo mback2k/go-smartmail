@@ -341,10 +341,16 @@ func (s *SmartServer) smartMessages(messages <-chan *imap.Message) error {
 func (c *smartConfig) run() error {
 	err := c.init()
 	if err != nil {
+		c.log().Error(err)
 		return err
 	}
 	defer c.close()
-	return c.watch()
+	err = c.watch()
+	if err != nil {
+		c.log().Error(err)
+		return err
+	}
+	return nil
 }
 
 func (c *smartConfig) log() *log.Entry {
